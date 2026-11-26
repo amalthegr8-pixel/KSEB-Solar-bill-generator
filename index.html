@@ -1,0 +1,688 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="theme-color" content="#0f766e" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <title>KSEB Solar Net Meter & Bill Calculator</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    * { -webkit-tap-highlight-color: transparent; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f1f5f9; }
+    input[type="number"]::-webkit-inner-spin-button { opacity: 1; }
+    .tab-active { color: #0f766e; border-top: 2.5px solid #0f766e; background: #f0fdfa; }
+  </style>
+</head>
+<body class="text-slate-800 pb-24">
+
+  <!-- Top App Bar -->
+  <header class="bg-teal-700 text-white sticky top-0 z-30 shadow-md">
+    <div class="max-w-lg mx-auto px-4 py-3 flex items-center justify-between">
+      <div>
+        <h1 class="text-base font-bold tracking-tight flex items-center gap-1.5">
+          <span>⚡</span> KSEB Solar & Net Meter
+        </h1>
+        <p class="text-[11px] text-teal-100">KSERC LT-1 Domestic Tariff & Banking Tracker</p>
+      </div>
+      <div class="flex items-center gap-2">
+        <select id="consumerSelect" onchange="switchConsumer()" class="bg-teal-800 text-white text-xs font-medium rounded-lg px-2.5 py-1.5 border border-teal-600 focus:outline-none">
+        </select>
+        <button onclick="openModal('consumerModal')" class="bg-teal-600 hover:bg-teal-500 text-white text-xs font-bold px-2.5 py-1.5 rounded-lg border border-teal-500" title="Add/Manage Consumers">+ Add</button>
+      </div>
+    </div>
+  </header>
+
+  <main class="max-w-lg mx-auto px-3 pt-3 space-y-3">
+
+    <!-- TAB 1: CALCULATOR -->
+    <section id="tab-calc" class="space-y-3">
+
+      <!-- Billing Config Card -->
+      <div class="bg-white rounded-2xl p-3.5 shadow-sm border border-slate-200/80">
+        <div class="flex items-center justify-between mb-2.5">
+          <span class="text-xs font-bold uppercase tracking-wider text-slate-500">Connection & Billing Settings</span>
+          <span id="phaseBadge" class="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-teal-50 text-teal-700 border border-teal-200">Single Phase • 2M</span>
+        </div>
+        <div class="grid grid-cols-2 gap-2.5 text-xs">
+          <div>
+            <label class="block text-slate-500 mb-1">Billing Cycle</label>
+            <select id="billingCycle" onchange="recalculate()" class="w-full rounded-lg border border-slate-300 px-2.5 py-1.5 bg-slate-50 font-medium">
+              <option value="2" selected>Bi-Monthly (2 Months)</option>
+              <option value="1">Monthly (1 Month)</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-slate-500 mb-1">Supply Phase</label>
+            <select id="supplyPhase" onchange="recalculate()" class="w-full rounded-lg border border-slate-300 px-2.5 py-1.5 bg-slate-50 font-medium">
+              <option value="1" selected>Single Phase (1-Ph)</option>
+              <option value="3">Three Phase (3-Ph)</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-slate-500 mb-1">Entry Mode</label>
+            <select id="entryMode" onchange="toggleEntryMode()" class="w-full rounded-lg border border-slate-300 px-2.5 py-1.5 bg-slate-50 font-medium">
+              <option value="meter" selected>Bi-Directional Readings</option>
+              <option value="direct">Direct kWh Units</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-slate-500 mb-1">Tariff Regime</label>
+            <select id="tariffRegime" onchange="recalculate()" class="w-full rounded-lg border border-slate-300 px-2.5 py-1.5 bg-slate-50 font-medium">
+              <option value="2025" selected>KSERC 2025–27 LT-1</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <!-- Meter Readings / Direct Inputs -->
+      <div class="bg-white rounded-2xl p-3.5 shadow-sm border border-slate-200/80 space-y-3">
+        <div class="flex items-center justify-between">
+          <h2 class="text-xs font-bold uppercase tracking-wider text-slate-500">Meter Readings & Solar Generation</h2>
+          <button onclick="prefillFromLastHistory()" class="text-[11px] font-semibold text-teal-700 hover:underline">Auto-fill Prev Reading</button>
+        </div>
+
+        <!-- Bi-Directional Meter Mode -->
+        <div id="meterInputs" class="space-y-2.5">
+          <div class="bg-slate-50 p-2.5 rounded-xl border border-slate-200/70">
+            <div class="text-[11px] font-bold text-slate-600 mb-1.5">1. Grid Import Register (kWh Drawn from KSEB)</div>
+            <div class="grid grid-cols-2 gap-2">
+              <div>
+                <label class="block text-[11px] text-slate-500">Last Month Final</label>
+                <input type="number" step="0.01" id="prevImport" oninput="recalculate()" placeholder="e.g. 4250" class="w-full mt-0.5 rounded-lg border border-slate-300 px-2.5 py-1.5 text-sm font-semibold bg-white" />
+              </div>
+              <div>
+                <label class="block text-[11px] text-slate-500">This Month Current</label>
+                <input type="number" step="0.01" id="currImport" oninput="recalculate()" placeholder="e.g. 4680" class="w-full mt-0.5 rounded-lg border border-slate-300 px-2.5 py-1.5 text-sm font-semibold bg-white" />
+              </div>
+            </div>
+          </div>
+
+          <div class="bg-emerald-50/60 p-2.5 rounded-xl border border-emerald-200/70">
+            <div class="text-[11px] font-bold text-emerald-800 mb-1.5">2. Grid Export Register (kWh Sent to KSEB)</div>
+            <div class="grid grid-cols-2 gap-2">
+              <div>
+                <label class="block text-[11px] text-emerald-700">Last Month Final</label>
+                <input type="number" step="0.01" id="prevExport" oninput="recalculate()" placeholder="e.g. 3100" class="w-full mt-0.5 rounded-lg border border-emerald-300 px-2.5 py-1.5 text-sm font-semibold bg-white" />
+              </div>
+              <div>
+                <label class="block text-[11px] text-emerald-700">This Month Current</label>
+                <input type="number" step="0.01" id="currExport" oninput="recalculate()" placeholder="e.g. 3620" class="w-full mt-0.5 rounded-lg border border-emerald-300 px-2.5 py-1.5 text-sm font-semibold bg-white" />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Direct kWh Mode -->
+        <div id="directInputs" class="hidden space-y-2.5">
+          <div class="grid grid-cols-2 gap-2">
+            <div>
+              <label class="block text-[11px] text-slate-500">Total Consumption (kWh)</label>
+              <input type="number" step="0.01" id="directConsumption" oninput="recalculate()" placeholder="e.g. 550" class="w-full mt-0.5 rounded-lg border border-slate-300 px-2.5 py-1.5 text-sm font-semibold bg-slate-50" />
+            </div>
+            <div>
+              <label class="block text-[11px] text-slate-500">Solar Generation (kWh)</label>
+              <input type="number" step="0.01" id="directGeneration" oninput="recalculate()" placeholder="e.g. 640" class="w-full mt-0.5 rounded-lg border border-slate-300 px-2.5 py-1.5 text-sm font-semibold bg-slate-50" />
+            </div>
+          </div>
+        </div>
+
+        <!-- Solar Generation & Banked Credits -->
+        <div class="grid grid-cols-2 gap-2 pt-1">
+          <div id="solarGenWrapper">
+            <label class="block text-[11px] text-amber-700 font-semibold">☀️ Solar Generation (kWh)</label>
+            <input type="number" step="0.01" id="solarGen" oninput="recalculate()" placeholder="Inverter kWh" class="w-full mt-0.5 rounded-lg border border-amber-300 px-2.5 py-1.5 text-sm font-semibold bg-amber-50/40" />
+          </div>
+          <div>
+            <label class="block text-[11px] text-indigo-700 font-semibold">🏦 Carried Banked Units</label>
+            <input type="number" step="0.01" id="bankedIn" oninput="recalculate()" value="0" class="w-full mt-0.5 rounded-lg border border-indigo-300 px-2.5 py-1.5 text-sm font-semibold bg-indigo-50/40" />
+          </div>
+        </div>
+
+        <!-- Advanced Options Toggle -->
+        <details class="text-xs border-t border-slate-100 pt-2">
+          <summary class="cursor-pointer font-semibold text-slate-500 hover:text-teal-700">Advanced KSEB Charges (Fuel Surcharge, Meter Rent, ToD)</summary>
+          <div class="grid grid-cols-2 gap-2 mt-2.5">
+            <div>
+              <label class="block text-[11px] text-slate-500">Fuel Surcharge (₹/kWh)</label>
+              <input type="number" step="0.01" id="fuelSurchargeRate" oninput="recalculate()" value="0.09" class="w-full mt-0.5 rounded-lg border border-slate-300 px-2 py-1 text-xs" />
+            </div>
+            <div>
+              <label class="block text-[11px] text-slate-500">Net Meter Rent (₹/mo)</label>
+              <input type="number" step="1" id="meterRentMonthly" oninput="recalculate()" value="15" class="w-full mt-0.5 rounded-lg border border-slate-300 px-2 py-1 text-xs" />
+            </div>
+            <div>
+              <label class="block text-[11px] text-slate-500">Peak Evening Import (kWh)</label>
+              <input type="number" step="0.01" id="todPeakImport" oninput="recalculate()" value="0" class="w-full mt-0.5 rounded-lg border border-slate-300 px-2 py-1 text-xs" />
+            </div>
+            <div>
+              <label class="block text-[11px] text-slate-500">APPC Payout Rate (₹/u)</label>
+              <select id="appcRate" onchange="recalculate()" class="w-full mt-0.5 rounded-lg border border-slate-300 px-2 py-1 text-xs">
+                <option value="2.79" selected>₹2.79/u (New / Post-2025)</option>
+                <option value="3.08">₹3.08/u (Legacy Pre-2025)</option>
+              </select>
+            </div>
+          </div>
+        </details>
+      </div>
+
+      <!-- Cliff Alert Banner -->
+      <div id="cliffAlert" class="hidden bg-amber-50 border border-amber-300 text-amber-900 rounded-xl p-3 text-xs flex items-start gap-2">
+        <span class="text-base">⚠️</span>
+        <div id="cliffAlertText"></div>
+      </div>
+
+      <!-- Bill Result Summary Card -->
+      <div class="bg-gradient-to-br from-teal-800 to-teal-950 text-white rounded-2xl p-4 shadow-md space-y-3">
+        <div class="flex items-start justify-between">
+          <div>
+            <div class="text-[11px] uppercase tracking-wider text-teal-200 font-semibold">Estimated KSEB Payable Bill</div>
+            <div id="totalPayable" class="text-3xl font-extrabold tracking-tight mt-0.5">₹0.00</div>
+            <div id="tariffTypeLabel" class="text-[11px] text-teal-200 mt-0.5">Telescopic Slab • Zero Net Import</div>
+          </div>
+          <div class="text-right">
+            <span id="netStatusBadge" class="inline-block px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-500/20 text-emerald-200 border border-emerald-400/30">Net Exporter</span>
+            <div class="text-[11px] text-teal-200 mt-1.5">New Banked: <strong id="bankedOut" class="text-white">0 kWh</strong></div>
+          </div>
+        </div>
+
+        <!-- Energy Balance Metrics -->
+        <div class="grid grid-cols-4 gap-1.5 bg-white/10 rounded-xl p-2.5 text-center">
+          <div>
+            <div class="text-[10px] text-teal-200">Grid Import</div>
+            <div id="statImport" class="text-xs font-bold mt-0.5">0 u</div>
+          </div>
+          <div>
+            <div class="text-[10px] text-teal-200">Grid Export</div>
+            <div id="statExport" class="text-xs font-bold mt-0.5">0 u</div>
+          </div>
+          <div>
+            <div class="text-[10px] text-teal-200">Self-Used</div>
+            <div id="statSelfUsed" class="text-xs font-bold text-amber-300 mt-0.5">0 u</div>
+          </div>
+          <div>
+            <div class="text-[10px] text-teal-200">Total Used</div>
+            <div id="statTotalCons" class="text-xs font-bold mt-0.5">0 u</div>
+          </div>
+        </div>
+
+        <!-- Itemized Breakdown -->
+        <div class="bg-white text-slate-800 rounded-xl p-3 text-xs space-y-1.5">
+          <div class="font-bold text-slate-600 uppercase text-[10px] tracking-wider pb-1 border-b border-slate-100">Bill Breakdown</div>
+          <div class="flex justify-between">
+            <span>Net Billed Units (<span id="netBilledUnits">0</span> kWh)</span>
+            <span id="energyCharge" class="font-semibold">₹0.00</span>
+          </div>
+          <div class="flex justify-between">
+            <span>Fixed Charge (<span id="fixedChargeDesc">1-Ph</span>)</span>
+            <span id="fixedCharge" class="font-semibold">₹0.00</span>
+          </div>
+          <div class="flex justify-between">
+            <span>Electricity Duty (10% on Energy)</span>
+            <span id="electricityDuty" class="font-semibold">₹0.00</span>
+          </div>
+          <div class="flex justify-between">
+            <span>Fuel Surcharge</span>
+            <span id="fuelSurcharge" class="font-semibold">₹0.00</span>
+          </div>
+          <div class="flex justify-between">
+            <span>Net Meter Rent + GST (18%)</span>
+            <span id="meterRentTotal" class="font-semibold">₹0.00</span>
+          </div>
+          <div id="slabBreakdownBox" class="pt-1.5 border-t border-slate-100 text-[11px] text-slate-500 space-y-0.5"></div>
+          <div class="pt-1.5 border-t border-slate-200 flex justify-between text-emerald-700 font-semibold">
+            <span>Est. March 31 APPC Credit Value</span>
+            <span id="appcValue">₹0.00</span>
+          </div>
+        </div>
+
+        <button onclick="saveCycleToHistory()" class="w-full bg-amber-400 hover:bg-amber-300 text-slate-950 font-bold text-xs py-2.5 rounded-xl shadow transition">
+          💾 Save Billing Cycle & Roll Over Banked Units
+        </button>
+      </div>
+    </section>
+
+    <!-- TAB 2: HISTORY & CHARTS -->
+    <section id="tab-history" class="hidden space-y-3">
+      <div class="bg-white rounded-2xl p-3.5 shadow-sm border border-slate-200/80">
+        <div class="flex items-center justify-between mb-2">
+          <h2 class="text-xs font-bold uppercase tracking-wider text-slate-500">Solar Generation vs Consumption</h2>
+          <div class="flex gap-1.5">
+            <button onclick="exportCSV()" class="text-[11px] font-semibold bg-slate-100 hover:bg-slate-200 px-2.5 py-1 rounded-lg">CSV</button>
+            <button onclick="exportJSON()" class="text-[11px] font-semibold bg-slate-100 hover:bg-slate-200 px-2.5 py-1 rounded-lg">JSON</button>
+          </div>
+        </div>
+        <div id="chartContainer" class="h-40 flex items-end gap-2 pt-4 pb-1 px-1 border-b border-slate-200 overflow-x-auto">
+          <div class="text-xs text-slate-400 m-auto">Save a billing cycle to view charts</div>
+        </div>
+        <div class="flex justify-center gap-4 mt-2 text-[11px] text-slate-500">
+          <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-sm bg-amber-400 inline-block"></span> Solar Gen</span>
+          <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-sm bg-teal-600 inline-block"></span> Total Consumption</span>
+        </div>
+      </div>
+
+      <div class="bg-white rounded-2xl p-3.5 shadow-sm border border-slate-200/80 space-y-2.5">
+        <h2 class="text-xs font-bold uppercase tracking-wider text-slate-500">Saved Billing Cycles</h2>
+        <div id="historyList" class="space-y-2 text-xs">
+          <p class="text-slate-400 text-center py-4">No saved cycles yet.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 3: TARIFF REFERENCE -->
+    <section id="tab-tariff" class="hidden space-y-3">
+      <div class="bg-white rounded-2xl p-3.5 shadow-sm border border-slate-200/80 text-xs space-y-2.5">
+        <h2 class="text-sm font-bold text-teal-800">KSERC LT-1 Domestic Tariff & Net Metering Rules</h2>
+        <p class="text-slate-600 leading-relaxed">
+          Under Kerala State Electricity Regulatory Commission (KSERC) net metering rules, imported units are offset against exported units plus carried-forward banked credits within the settlement year (October to September / March 31 payout).
+        </p>
+        <div class="overflow-x-auto">
+          <table class="w-full text-left border-collapse text-[11px]">
+            <thead>
+              <tr class="bg-slate-100 text-slate-700">
+                <th class="p-2 border border-slate-200">Monthly Slab (kWh)</th>
+                <th class="p-2 border border-slate-200">Bi-Monthly (2M)</th>
+                <th class="p-2 border border-slate-200">Energy Rate</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr><td class="p-1.5 border">0 – 50 (Telescopic)</td><td class="p-1.5 border">0 – 100</td><td class="p-1.5 border font-semibold">₹3.35 / kWh</td></tr>
+              <tr><td class="p-1.5 border">51 – 100 (Telescopic)</td><td class="p-1.5 border">101 – 200</td><td class="p-1.5 border font-semibold">₹4.25 / kWh</td></tr>
+              <tr><td class="p-1.5 border">101 – 150 (Telescopic)</td><td class="p-1.5 border">201 – 300</td><td class="p-1.5 border font-semibold">₹5.35 / kWh</td></tr>
+              <tr><td class="p-1.5 border">151 – 200 (Telescopic)</td><td class="p-1.5 border">301 – 400</td><td class="p-1.5 border font-semibold">₹7.20 / kWh</td></tr>
+              <tr><td class="p-1.5 border">201 – 250 (Telescopic)</td><td class="p-1.5 border">401 – 500</td><td class="p-1.5 border font-semibold">₹8.50 / kWh</td></tr>
+              <tr class="bg-amber-50"><td class="p-1.5 border font-semibold">Above 250 (Non-Telescopic)</td><td class="p-1.5 border font-semibold">Above 500</td><td class="p-1.5 border font-bold text-amber-800">Flat ₹6.70 – ₹9.20/u</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Bottom Android Navigation Bar -->
+  <nav class="fixed bottom-0 inset-x-0 bg-white border-t border-slate-200 shadow-lg z-30">
+    <div class="max-w-lg mx-auto grid grid-cols-3 text-center">
+      <button onclick="switchTab('calc')" id="nav-calc" class="py-2.5 flex flex-col items-center justify-center tab-active">
+        <span class="text-base">🧮</span>
+        <span class="text-[11px] font-bold mt-0.5">Calculator</span>
+      </button>
+      <button onclick="switchTab('history')" id="nav-history" class="py-2.5 flex flex-col items-center justify-center text-slate-500">
+        <span class="text-base">📊</span>
+        <span class="text-[11px] font-bold mt-0.5">History & Chart</span>
+      </button>
+      <button onclick="switchTab('tariff')" id="nav-tariff" class="py-2.5 flex flex-col items-center justify-center text-slate-500">
+        <span class="text-base">📘</span>
+        <span class="text-[11px] font-bold mt-0.5">KSEB Slabs</span>
+      </button>
+    </div>
+  </nav>
+
+  <!-- Consumer Profile Modal -->
+  <div id="consumerModal" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl max-w-sm w-full p-4 space-y-3 shadow-xl">
+      <div class="flex justify-between items-center">
+        <h3 class="font-bold text-sm text-slate-800">Manage KSEB Consumer Numbers</h3>
+        <button onclick="closeModal('consumerModal')" class="text-slate-400 hover:text-slate-700 font-bold">✕</button>
+      </div>
+      <div class="space-y-2 text-xs">
+        <input type="text" id="newConsumerName" placeholder="Label (e.g. Home Main / Consumer #2)" class="w-full rounded-lg border border-slate-300 px-3 py-2" />
+        <input type="text" id="newConsumerNo" placeholder="13-Digit KSEB Consumer Number" class="w-full rounded-lg border border-slate-300 px-3 py-2" />
+        <input type="number" step="0.1" id="newSolarKw" placeholder="Solar Plant Capacity (kWp, e.g. 3)" class="w-full rounded-lg border border-slate-300 px-3 py-2" />
+        <button onclick="addConsumer()" class="w-full bg-teal-700 text-white font-bold py-2 rounded-lg">Add Consumer Profile</button>
+      </div>
+      <div id="consumerListModal" class="border-t border-slate-100 pt-2 space-y-1.5 text-xs max-h-40 overflow-y-auto"></div>
+    </div>
+  </div>
+
+  <script>
+    const STORAGE_KEY = 'kseb_solar_tracker_v1';
+    let appState = JSON.parse(localStorage.getItem(STORAGE_KEY)) || {
+      activeConsumerId: 'c1',
+      consumers: [
+        { id: 'c1', name: 'Home Main (3 kWp)', consumerNo: '1155667788990', solarKw: 3.0, bankedUnits: 0, history: [] },
+        { id: 'c2', name: 'Consumer #2', consumerNo: '1155667788991', solarKw: 0, bankedUnits: 0, history: [] }
+      ]
+    };
+
+    function saveState() {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(appState));
+    }
+
+    function getActiveConsumer() {
+      return appState.consumers.find(c => c.id === appState.activeConsumerId) || appState.consumers[0];
+    }
+
+    function renderConsumerDropdown() {
+      const sel = document.getElementById('consumerSelect');
+      sel.innerHTML = appState.consumers.map(c =>
+        `<option value="${c.id}" ${c.id === appState.activeConsumerId ? 'selected' : ''}>${c.name}</option>`
+      ).join('');
+      const modalList = document.getElementById('consumerListModal');
+      modalList.innerHTML = appState.consumers.map(c => `
+        <div class="flex justify-between items-center bg-slate-50 px-2.5 py-1.5 rounded-lg">
+          <div>
+            <div class="font-semibold">${c.name}</div>
+            <div class="text-[10px] text-slate-500">No: ${c.consumerNo} • ${c.solarKw} kWp • Banked: ${c.bankedUnits} u</div>
+          </div>
+          ${appState.consumers.length > 1 ? `<button onclick="deleteConsumer('${c.id}')" class="text-red-500 font-bold px-1.5">Delete</button>` : ''}
+        </div>
+      `).join('');
+    }
+
+    function switchConsumer() {
+      appState.activeConsumerId = document.getElementById('consumerSelect').value;
+      saveState();
+      const c = getActiveConsumer();
+      document.getElementById('bankedIn').value = c.bankedUnits || 0;
+      prefillFromLastHistory();
+      recalculate();
+      renderHistory();
+    }
+
+    function addConsumer() {
+      const name = document.getElementById('newConsumerName').value.trim();
+      const consumerNo = document.getElementById('newConsumerNo').value.trim() || 'N/A';
+      const solarKw = parseFloat(document.getElementById('newSolarKw').value) || 0;
+      if (!name) return alert('Please enter a label for this connection.');
+      const id = 'c_' + Date.now();
+      appState.consumers.push({ id, name, consumerNo, solarKw, bankedUnits: 0, history: [] });
+      appState.activeConsumerId = id;
+      saveState();
+      document.getElementById('newConsumerName').value = '';
+      document.getElementById('newConsumerNo').value = '';
+      document.getElementById('newSolarKw').value = '';
+      renderConsumerDropdown();
+      switchConsumer();
+      closeModal('consumerModal');
+    }
+
+    function deleteConsumer(id) {
+      appState.consumers = appState.consumers.filter(c => c.id !== id);
+      appState.activeConsumerId = appState.consumers[0].id;
+      saveState();
+      renderConsumerDropdown();
+      switchConsumer();
+    }
+
+    function toggleEntryMode() {
+      const mode = document.getElementById('entryMode').value;
+      document.getElementById('meterInputs').classList.toggle('hidden', mode !== 'meter');
+      document.getElementById('directInputs').classList.toggle('hidden', mode !== 'direct');
+      document.getElementById('solarGenWrapper').classList.toggle('hidden', mode === 'direct');
+      recalculate();
+    }
+
+    function prefillFromLastHistory() {
+      const c = getActiveConsumer();
+      document.getElementById('bankedIn').value = c.bankedUnits || 0;
+      if (c.history && c.history.length > 0) {
+        const last = c.history[c.history.length - 1];
+        if (last.currImport !== undefined) document.getElementById('prevImport').value = last.currImport;
+        if (last.currExport !== undefined) document.getElementById('prevExport').value = last.currExport;
+      }
+    }
+
+    // KSERC 2025-27 LT-1 Domestic Energy Charge Calculation
+    function calculateEnergyCharge(netUnits, months) {
+      if (netUnits <= 0) return { amount: 0, regime: 'Zero Net Import', details: [] };
+      const monthlyEq = netUnits / months;
+      let amount = 0;
+      let details = [];
+
+      if (monthlyEq <= 250) {
+        // Telescopic slabs scaled by billing months
+        const slabs = [
+          { limit: 50 * months, rate: 3.35, label: `First ${50 * months} u @ ₹3.35` },
+          { limit: 50 * months, rate: 4.25, label: `Next ${50 * months} u @ ₹4.25` },
+          { limit: 50 * months, rate: 5.35, label: `Next ${50 * months} u @ ₹5.35` },
+          { limit: 50 * months, rate: 7.20, label: `Next ${50 * months} u @ ₹7.20` },
+          { limit: 50 * months, rate: 8.50, label: `Next ${50 * months} u @ ₹8.50` }
+        ];
+        let rem = netUnits;
+        for (const s of slabs) {
+          if (rem <= 0) break;
+          const u = Math.min(rem, s.limit);
+          const cost = u * s.rate;
+          amount += cost;
+          details.push(`${s.label}: ₹${cost.toFixed(2)}`);
+          rem -= u;
+        }
+        return { amount, regime: 'Telescopic Slab', details };
+      } else {
+        // Non-telescopic flat slab rate on entire consumption
+        let rate = 6.70;
+        if (monthlyEq <= 300) rate = 6.70;
+        else if (monthlyEq <= 350) rate = 7.60;
+        else if (monthlyEq <= 400) rate = 7.95;
+        else if (monthlyEq <= 500) rate = 8.25;
+        else rate = 9.20;
+
+        amount = netUnits * rate;
+        details.push(`Non-Telescopic Flat: ${netUnits.toFixed(1)} u × ₹${rate.toFixed(2)} = ₹${amount.toFixed(2)}`);
+        return { amount, regime: `Non-Telescopic (₹${rate.toFixed(2)}/u)`, details };
+      }
+    }
+
+    function calculateFixedCharge(netUnits, months, phase) {
+      const monthlyEq = netUnits / months;
+      let monthlyFixed = 0;
+      if (phase === 1) {
+        if (monthlyEq <= 50) monthlyFixed = 45;
+        else if (monthlyEq <= 100) monthlyFixed = 75;
+        else if (monthlyEq <= 150) monthlyFixed = 95;
+        else if (monthlyEq <= 200) monthlyFixed = 130;
+        else if (monthlyEq <= 250) monthlyFixed = 150;
+        else monthlyFixed = 175;
+      } else {
+        // Three-phase LT-1 domestic fixed charge
+        monthlyFixed = monthlyEq <= 250 ? 210 : 240;
+      }
+      return monthlyFixed * months;
+    }
+
+    function recalculate() {
+      const months = parseInt(document.getElementById('billingCycle').value, 10);
+      const phase = parseInt(document.getElementById('supplyPhase').value, 10);
+      const mode = document.getElementById('entryMode').value;
+      const bankedIn = Math.max(0, parseFloat(document.getElementById('bankedIn').value) || 0);
+      const fuelRate = Math.max(0, parseFloat(document.getElementById('fuelSurchargeRate').value) || 0);
+      const meterRentMo = Math.max(0, parseFloat(document.getElementById('meterRentMonthly').value) || 0);
+      const todPeakImport = Math.max(0, parseFloat(document.getElementById('todPeakImport').value) || 0);
+      const appcRate = parseFloat(document.getElementById('appcRate').value) || 2.79;
+
+      document.getElementById('phaseBadge').textContent = `${phase === 1 ? 'Single Phase' : 'Three Phase'} • ${months}M`;
+
+      let gridImport = 0, gridExport = 0, solarGen = 0, totalConsumption = 0, selfUsedSolar = 0;
+
+      if (mode === 'meter') {
+        const pImp = parseFloat(document.getElementById('prevImport').value) || 0;
+        const cImp = parseFloat(document.getElementById('currImport').value) || 0;
+        const pExp = parseFloat(document.getElementById('prevExport').value) || 0;
+        const cExp = parseFloat(document.getElementById('currExport').value) || 0;
+        solarGen = Math.max(0, parseFloat(document.getElementById('solarGen').value) || 0);
+
+        gridImport = Math.max(0, cImp - pImp);
+        gridExport = Math.max(0, cExp - pExp);
+        selfUsedSolar = Math.max(0, solarGen - gridExport);
+        totalConsumption = gridImport + selfUsedSolar;
+      } else {
+        totalConsumption = Math.max(0, parseFloat(document.getElementById('directConsumption').value) || 0);
+        solarGen = Math.max(0, parseFloat(document.getElementById('directGeneration').value) || 0);
+        // Estimate split assuming 45% daytime self-consumption if meter registers aren't entered
+        selfUsedSolar = Math.min(totalConsumption, solarGen * 0.45);
+        gridImport = Math.max(0, totalConsumption - selfUsedSolar);
+        gridExport = Math.max(0, solarGen - selfUsedSolar);
+      }
+
+      // ToD peak settlement adjustment (0.75 factor on solar credit against peak import if applicable)
+      const todPenaltyUnits = todPeakImport > 0 ? todPeakImport * 0.25 : 0;
+      const effectiveCredits = gridExport + bankedIn;
+      const netBalance = (gridImport + todPenaltyUnits) - effectiveCredits;
+
+      const netBilledUnits = netBalance > 0 ? netBalance : 0;
+      const bankedOut = netBalance < 0 ? Math.abs(netBalance) : 0;
+
+      // Cliff alert check (250 units/month = 500 units bi-monthly)
+      const cliffThreshold = 250 * months;
+      const cliffBox = document.getElementById('cliffAlert');
+      if (netBilledUnits > cliffThreshold * 0.85 && netBilledUnits <= cliffThreshold) {
+        cliffBox.classList.remove('hidden');
+        document.getElementById('cliffAlertText').innerHTML = `<strong>Approaching Non-Telescopic Cliff:</strong> You are at ${netBilledUnits.toFixed(0)} / ${cliffThreshold} net units. Crossing ${cliffThreshold} units removes telescopic slab subsidies for the entire bill!`;
+      } else if (netBilledUnits > cliffThreshold) {
+        cliffBox.classList.remove('hidden');
+        document.getElementById('cliffAlertText').innerHTML = `<strong>Non-Telescopic Tariff Active:</strong> Net billed units (${netBilledUnits.toFixed(0)} kWh) exceeded ${cliffThreshold} kWh, applying flat slab rates across all units.`;
+      } else {
+        cliffBox.classList.add('hidden');
+      }
+
+      const energyRes = calculateEnergyCharge(netBilledUnits, months);
+      const fixedChg = calculateFixedCharge(netBilledUnits, months, phase);
+      const duty = energyRes.amount * 0.10;
+      const fuelChg = netBilledUnits * fuelRate;
+      const meterRent = (meterRentMo * months) * 1.18; // incl 18% GST
+      const totalBill = energyRes.amount + fixedChg + duty + fuelChg + meterRent;
+
+      // Update UI
+      document.getElementById('totalPayable').textContent = `₹${totalBill.toFixed(2)}`;
+      document.getElementById('tariffTypeLabel').textContent = `${energyRes.regime} • ${months === 2 ? 'Bi-Monthly' : 'Monthly'}`;
+      document.getElementById('bankedOut').textContent = `${bankedOut.toFixed(1)} kWh`;
+
+      const badge = document.getElementById('netStatusBadge');
+      if (bankedOut > 0) {
+        badge.textContent = 'Net Exporter (+Credit)';
+        badge.className = 'inline-block px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-500/20 text-emerald-200 border border-emerald-400/30';
+      } else {
+        badge.textContent = 'Net Importer';
+        badge.className = 'inline-block px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-500/20 text-amber-200 border border-amber-400/30';
+      }
+
+      document.getElementById('statImport').textContent = `${gridImport.toFixed(1)} u`;
+      document.getElementById('statExport').textContent = `${gridExport.toFixed(1)} u`;
+      document.getElementById('statSelfUsed').textContent = `${selfUsedSolar.toFixed(1)} u`;
+      document.getElementById('statTotalCons').textContent = `${totalConsumption.toFixed(1)} u`;
+
+      document.getElementById('netBilledUnits').textContent = netBilledUnits.toFixed(1);
+      document.getElementById('energyCharge').textContent = `₹${energyRes.amount.toFixed(2)}`;
+      document.getElementById('fixedChargeDesc').textContent = `${phase}-Ph, ${months}M`;
+      document.getElementById('fixedCharge').textContent = `₹${fixedChg.toFixed(2)}`;
+      document.getElementById('electricityDuty').textContent = `₹${duty.toFixed(2)}`;
+      document.getElementById('fuelSurcharge').textContent = `₹${fuelChg.toFixed(2)}`;
+      document.getElementById('meterRentTotal').textContent = `₹${meterRent.toFixed(2)}`;
+      document.getElementById('slabBreakdownBox').innerHTML = energyRes.details.map(d => `<div>• ${d}</div>`).join('');
+      document.getElementById('appcValue').textContent = `₹${(bankedOut * appcRate).toFixed(2)}`;
+
+      return {
+        date: new Date().toLocaleDateString('en-IN', { month: 'short', year: 'numeric' }),
+        months,
+        prevImport: parseFloat(document.getElementById('prevImport').value) || 0,
+        currImport: parseFloat(document.getElementById('currImport').value) || 0,
+        prevExport: parseFloat(document.getElementById('prevExport').value) || 0,
+        currExport: parseFloat(document.getElementById('currExport').value) || 0,
+        gridImport,
+        gridExport,
+        solarGen,
+        totalConsumption,
+        netBilledUnits,
+        bankedOut,
+        totalBill
+      };
+    }
+
+    function saveCycleToHistory() {
+      const snapshot = recalculate();
+      const c = getActiveConsumer();
+      c.history.push(snapshot);
+      c.bankedUnits = parseFloat(snapshot.bankedOut.toFixed(2));
+      saveState();
+      document.getElementById('bankedIn').value = c.bankedUnits;
+      renderConsumerDropdown();
+      renderHistory();
+      alert(`Saved! New carried-forward banked balance: ${c.bankedUnits} kWh.`);
+    }
+
+    function renderHistory() {
+      const c = getActiveConsumer();
+      const list = document.getElementById('historyList');
+      const chart = document.getElementById('chartContainer');
+
+      if (!c.history || c.history.length === 0) {
+        list.innerHTML = '<p class="text-slate-400 text-center py-4">No saved cycles yet.</p>';
+        chart.innerHTML = '<div class="text-xs text-slate-400 m-auto">Save a billing cycle to view charts</div>';
+        return;
+      }
+
+      const maxVal = Math.max(...c.history.map(h => Math.max(h.solarGen, h.totalConsumption, 10)));
+      chart.innerHTML = c.history.map(h => {
+        const sH = Math.round((h.solarGen / maxVal) * 110);
+        const cH = Math.round((h.totalConsumption / maxVal) * 110);
+        return `
+          <div class="flex flex-col items-center min-w-[56px]">
+            <div class="flex items-end gap-1 h-28">
+              <div style="height:${sH}px" class="w-4 bg-amber-400 rounded-t" title="Solar: ${h.solarGen} kWh"></div>
+              <div style="height:${cH}px" class="w-4 bg-teal-600 rounded-t" title="Used: ${h.totalConsumption} kWh"></div>
+            </div>
+            <span class="text-[10px] text-slate-500 mt-1 font-medium">${h.date}</span>
+          </div>
+        `;
+      }).join('');
+
+      list.innerHTML = [...c.history].reverse().map((h, idx) => `
+        <div class="border border-slate-200 rounded-xl p-2.5 flex justify-between items-center bg-slate-50">
+          <div>
+            <div class="font-bold text-slate-800">${h.date} (${h.months}M Cycle)</div>
+            <div class="text-[11px] text-slate-500">Solar: ${h.solarGen.toFixed(0)}u • Used: ${h.totalConsumption.toFixed(0)}u • Banked: ${h.bankedOut.toFixed(0)}u</div>
+          </div>
+          <div class="text-right">
+            <div class="font-extrabold text-teal-800 text-sm">₹${h.totalBill.toFixed(2)}</div>
+            <div class="text-[10px] text-slate-400">Net Billed: ${h.netBilledUnits.toFixed(0)}u</div>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    function exportCSV() {
+      const c = getActiveConsumer();
+      if (!c.history.length) return alert('No history to export.');
+      const headers = ['Date,Months,Import_kWh,Export_kWh,SolarGen_kWh,TotalUsed_kWh,NetBilled_kWh,BankedOut_kWh,TotalBill_INR'];
+      const rows = c.history.map(h => `${h.date},${h.months},${h.gridImport},${h.gridExport},${h.solarGen},${h.totalConsumption},${h.netBilledUnits},${h.bankedOut},${h.totalBill.toFixed(2)}`);
+      downloadFile(headers.concat(rows).join('\n'), `${c.name.replace(/\s+/g,'_')}_KSEB_History.csv`, 'text/csv');
+    }
+
+    function exportJSON() {
+      const c = getActiveConsumer();
+      downloadFile(JSON.stringify(c, null, 2), `${c.name.replace(/\s+/g,'_')}_KSEB_Backup.json`, 'application/json');
+    }
+
+    function downloadFile(content, filename, type) {
+      const blob = new Blob([content], { type });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+
+    function switchTab(tab) {
+      ['calc', 'history', 'tariff'].forEach(t => {
+        document.getElementById('tab-' + t).classList.toggle('hidden', t !== tab);
+        const nav = document.getElementById('nav-' + t);
+        nav.classList.toggle('tab-active', t === tab);
+        nav.classList.toggle('text-slate-500', t !== tab);
+      });
+      if (tab === 'history') renderHistory();
+    }
+
+    function openModal(id) { document.getElementById(id).classList.remove('hidden'); }
+    function closeModal(id) { document.getElementById(id).classList.add('hidden'); }
+
+    // Init
+    renderConsumerDropdown();
+    prefillFromLastHistory();
+    recalculate();
+  </script>
+</body>
+</html>

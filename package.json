@@ -1,0 +1,14 @@
+{
+  "name": "kseb-solar-tracker",
+  "version": "1.0.0",
+  "description": "KSEB Solar Net Meter & Bill Calculator Android App",
+  "scripts": {
+    "cap:sync": "npx cap sync android",
+    "apk:debug": "cd android && ./gradlew assembleDebug"
+  },
+  "dependencies": {
+    "@capacitor/android": "^6.1.2",
+    "@capacitor/cli": "^6.1.2",
+    "@capacitor/core": "^6.1.2"
+  }
+}

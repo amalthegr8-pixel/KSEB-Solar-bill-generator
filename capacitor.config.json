@@ -1,0 +1,9 @@
+{
+  "appId": "in.kseb.solartracker",
+  "appName": "KSEB Solar Tracker",
+  "webDir": "www",
+  "bundledWebRuntime": false,
+  "android": {
+    "allowMixedContent": true
+  }
+}
